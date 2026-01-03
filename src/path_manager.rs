@@ -2,6 +2,8 @@
 //!
 //! 处理 Windows 系统 PATH 环境变量的添加和移除
 
+#![allow(dead_code)]
+
 use anyhow::Result;
 use std::path::PathBuf;
 
