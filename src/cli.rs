@@ -12,6 +12,7 @@ use crate::integration::IntegrationManager;
 use crate::wizard::ConfigWizard;
 use crate::aggregator::{NotificationAggregator, get_state_file_path};
 use crate::sound::{SoundPlayer, SystemSound};
+#[cfg(windows)]
 use crate::path_manager::PathManager;
 
 #[derive(Parser, Debug)]
