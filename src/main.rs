@@ -3,6 +3,8 @@ mod config;
 mod notification;
 mod policy;
 mod integration;
+mod wizard;
+mod aggregator;
 
 use anyhow::Result;
 

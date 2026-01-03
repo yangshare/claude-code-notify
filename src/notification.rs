@@ -31,32 +31,41 @@ pub trait NotificationManager {
 pub fn get_notification_manager() -> Box<dyn NotificationManager> {
     #[cfg(windows)]
     {
-        Box::new(super::notification::platform::WindowsNotificationManager::new())
+        Box::new(platform::WindowsNotificationManager::new())
     }
 
     #[cfg(target_os = "macos")]
     {
-        Box::new(super::notification::platform::MacOSNotificationManager::new())
+        Box::new(platform::MacOSNotificationManager::new())
     }
 
     #[cfg(not(any(windows, target_os = "macos")))]
     {
-        Box::new(super::notification::platform::FallbackNotificationManager)
+        Box::new(platform::FallbackNotificationManager)
     }
 }
 
-// 平台特定实现将在下面提供
+// 平台特定实现
 
 #[cfg(windows)]
 mod platform {
-    use super::{NotificationManager, NotificationStatus, Result};
-    use windows::{core::*, Win32::UI::Notifications::*};
+    use super::{NotificationManager, NotificationStatus};
+    use anyhow::Result;
 
     pub struct WindowsNotificationManager;
 
     impl WindowsNotificationManager {
         pub fn new() -> Self {
             Self
+        }
+
+        /// 获取状态图标
+        fn get_status_icon(status: NotificationStatus) -> char {
+            match status {
+                NotificationStatus::Success => '✅',
+                NotificationStatus::Error => '❌',
+                NotificationStatus::Pending => '⏳',
+            }
         }
     }
 
@@ -68,9 +77,10 @@ mod platform {
             message: &str,
             _duration_ms: u64,
         ) -> Result<()> {
-            // TODO: 实现完整的 Windows 通知逻辑
-            log::info!("Windows 通知: {:?} - {} - {}", status, title, message);
-            println!("[Windows 通知] {}: {}", title, message);
+            // Windows Toast 通知需要 COM 初始化，在 MVP 版本中先使用简化版本
+            self.send_fallback_notification(status, title, message);
+
+            log::info!("Windows 通知已发送（使用简化版本）");
             Ok(())
         }
 
@@ -78,11 +88,19 @@ mod platform {
             true
         }
     }
+
+    impl WindowsNotificationManager {
+        fn send_fallback_notification(&self, status: NotificationStatus, title: &str, message: &str) {
+            let icon = Self::get_status_icon(status);
+            println!("[通知] {} {}: {}", icon, title, message);
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::{NotificationManager, NotificationStatus, Result};
+    use super::{NotificationManager, NotificationStatus};
+    use anyhow::Result;
 
     pub struct MacOSNotificationManager;
 
@@ -100,9 +118,17 @@ mod platform {
             message: &str,
             _duration_ms: u64,
         ) -> Result<()> {
-            // TODO: 实现 macOS 通知逻辑
-            log::info!("macOS 通知: {:?} - {} - {}", status, title, message);
-            println!("[macOS 通知] {}: {}", title, message);
+            // macOS 通知实现
+            let icon = match status {
+                NotificationStatus::Success => "✅",
+                NotificationStatus::Error => "❌",
+                NotificationStatus::Pending => "⏳",
+            };
+
+            log::info!("macOS 通知: {} {} - {}", icon, title, message);
+            println!("[macOS 通知] {} {}: {}", icon, title, message);
+
+            // TODO: 使用 cocoa 和 objc 实现真正的 macOS 通知
             Ok(())
         }
 
@@ -114,7 +140,8 @@ mod platform {
 
 #[cfg(not(any(windows, target_os = "macos")))]
 mod platform {
-    use super::{NotificationManager, NotificationStatus, Result};
+    use super::{NotificationManager, NotificationStatus};
+    use anyhow::Result;
 
     pub struct FallbackNotificationManager;
 
@@ -127,8 +154,14 @@ mod platform {
             _duration_ms: u64,
         ) -> Result<()> {
             // 后备方案：输出到终端
-            log::info!("后备通知: {:?} - {} - {}", status, title, message);
-            println!("[通知] {}: {}", title, message);
+            let icon = match status {
+                NotificationStatus::Success => "✅",
+                NotificationStatus::Error => "❌",
+                NotificationStatus::Pending => "⏳",
+            };
+
+            log::info!("后备通知: {} {} - {}", icon, title, message);
+            println!("[通知] {} {}: {}", icon, title, message);
             Ok(())
         }
 

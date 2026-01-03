@@ -3,7 +3,14 @@
 //! 处理命令行参数解析和子命令调度
 
 use clap::{Parser, Subcommand};
-use anyhow::Result;
+use anyhow::{Context, Result};
+
+use crate::config::{load_config, Config};
+use crate::notification::{get_notification_manager, NotificationManager, NotificationStatus};
+use crate::policy::PolicyEngine;
+use crate::integration::IntegrationManager;
+use crate::wizard::ConfigWizard;
+use crate::aggregator::{NotificationAggregator, get_state_file_path};
 
 #[derive(Parser, Debug)]
 #[command(name = "ccn")]
@@ -53,45 +60,305 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         Commands::Notify { status, duration, cmd } => {
-            log::info!("发送通知: status={}, duration={}, cmd={}", status, duration, cmd);
-            // TODO: 实现通知发送逻辑
-            println!("通知功能待实现");
-            Ok(())
+            handle_notify(status, duration, cmd)
         }
 
         Commands::Init => {
-            log::info!("启动配置向导");
-            // TODO: 实现配置向导
-            println!("配置向导待实现");
-            Ok(())
+            handle_init()
         }
 
         Commands::Setup => {
-            log::info!("开始自动集成");
-            // TODO: 实现自动集成
-            println!("自动集成待实现");
-            Ok(())
+            handle_setup()
         }
 
         Commands::Uninstall => {
-            log::info!("卸载集成");
-            // TODO: 实现卸载
-            println!("卸载功能待实现");
-            Ok(())
+            handle_uninstall()
         }
 
         Commands::Config => {
-            log::info!("显示当前配置");
-            // TODO: 实现配置显示
-            println!("配置显示待实现");
-            Ok(())
+            handle_config()
         }
 
         Commands::Test => {
-            log::info!("发送测试通知");
-            // TODO: 实现测试通知
-            println!("测试通知待实现");
-            Ok(())
+            handle_test()
         }
     }
+}
+
+/// 处理 notify 命令
+fn handle_notify(status: String, duration: u64, cmd: String) -> Result<()> {
+    log::info!("收到通知请求: status={}, duration={}, cmd={}", status, duration, cmd);
+
+    // 解析状态
+    let notification_status = match status.to_lowercase().as_str() {
+        "success" => NotificationStatus::Success,
+        "error" | "failed" | "failure" => NotificationStatus::Error,
+        "pending" | "running" => NotificationStatus::Pending,
+        _ => {
+            eprintln!("警告: 未知状态 '{}', 使用默认状态 'success'", status);
+            NotificationStatus::Success
+        }
+    };
+
+    // 加载配置
+    let config = load_config()
+        .context("无法加载配置文件")?;
+
+    // 创建策略引擎
+    let policy_engine = PolicyEngine::new(config.clone());
+
+    // 检查是否应该发送通知
+    if !policy_engine.should_notify(notification_status, duration, &cmd) {
+        log::info!("通知被策略过滤（时间阈值低于 {} 秒）", config.threshold.min_duration);
+        return Ok(());
+    }
+
+    // 如果启用聚合，使用聚合器
+    if config.aggregation.enabled {
+        return handle_aggregated_notification(&config, &status, duration, &cmd, notification_status);
+    }
+
+    // 直接发送通知
+    send_single_notification(notification_status, &cmd, duration, &config)
+}
+
+/// 处理聚合通知
+fn handle_aggregated_notification(
+    config: &Config,
+    status_str: &str,
+    duration: u64,
+    cmd: &str,
+    notification_status: NotificationStatus,
+) -> Result<()> {
+    let aggregator = NotificationAggregator::new(
+        get_state_file_path(),
+        config.aggregation.window,
+        config.aggregation.max_toasts,
+    );
+
+    // 尝试添加到聚合器
+    match aggregator.add_notification(status_str, duration, cmd) {
+        Ok(Some(result)) => {
+            // 达到聚合条件，发送聚合通知
+            log::info!("发送聚合通知: {} 个任务", result.total);
+
+            let status = match result.status() {
+                "error" => NotificationStatus::Error,
+                _ => NotificationStatus::Success,
+            };
+
+            let notifier = get_notification_manager();
+            notifier.send_notification(
+                status,
+                &result.title(),
+                &result.message(),
+                config.templates.default.duration,
+            )?;
+        }
+        Ok(None) => {
+            // 添加到聚合缓冲区，暂不发送
+            log::info!("通知已添加到聚合缓冲区");
+        }
+        Err(e) => {
+            log::warn!("聚合失败，发送单个通知: {}", e);
+            send_single_notification(notification_status, cmd, duration, config)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// 发送单个通知
+fn send_single_notification(
+    status: NotificationStatus,
+    cmd: &str,
+    duration: u64,
+    config: &Config,
+) -> Result<()> {
+    let notifier = get_notification_manager();
+
+    // 构建通知内容
+    let title = build_title(status, cmd);
+    let message = build_message(duration, cmd);
+
+    // 发送通知
+    let template_name = PolicyEngine::new(config.clone()).match_template(cmd);
+    let duration_ms = if let Some(name) = &template_name {
+        if name == "default" {
+            config.templates.default.duration
+        } else {
+            config.templates.custom.get(name)
+                .map(|t| t.duration)
+                .unwrap_or(config.templates.default.duration)
+        }
+    } else {
+        config.templates.default.duration
+    };
+
+    notifier.send_notification(status, &title, &message, duration_ms)
+        .context("发送通知失败")?;
+
+    log::info!("通知已发送");
+    Ok(())
+}
+
+/// 处理 test 命令
+fn handle_test() -> Result<()> {
+    println!("发送测试通知...");
+
+    let notifier = get_notification_manager();
+
+    if !notifier.is_available() {
+        println!("警告: 通知系统不可用");
+        return Ok(());
+    }
+
+    // 发送成功测试通知
+    notifier.send_notification(
+        NotificationStatus::Success,
+        "CCN 测试通知",
+        "CCN 已成功集成！",
+        5000,
+    )?;
+
+    println!("测试通知已发送");
+    Ok(())
+}
+
+/// 处理 config 命令
+fn handle_config() -> Result<()> {
+    let config = load_config()
+        .context("无法加载配置文件")?;
+
+    println!("当前配置：");
+    println!("版本: {}", config.version);
+    println!("声音: {}", if config.sound_enabled { "启用" } else { "禁用" });
+    println!("专注助手模式: {:?}", config.focus_assistant_mode);
+    println!("最小阈值: {} 秒", config.threshold.min_duration);
+    println!("白名单: {:?}", config.threshold.whitelist);
+    println!("聚合: {}", if config.aggregation.enabled { "启用" } else { "禁用" });
+    println!("聚合窗口: {} 毫秒", config.aggregation.window);
+    println!("日志级别: {}", config.logging.level);
+
+    Ok(())
+}
+
+/// 处理 init 命令
+fn handle_init() -> Result<()> {
+    println!("启动配置向导...\n");
+
+    let wizard = ConfigWizard::new();
+    match wizard.run() {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("配置向导出错: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// 处理 setup 命令
+fn handle_setup() -> Result<()> {
+    println!("正在设置 CCN 集成...");
+
+    let manager = IntegrationManager::new();
+
+    // 侦测配置文件
+    let config_path = manager.detect_config_path();
+    let config_path = match config_path {
+        Some(path) => {
+            println!("找到 Claude Code 配置文件: {:?}", path);
+            path
+        }
+        None => {
+            println!("未找到 Claude Code 配置文件");
+            println!("请确保 Claude Code 已安装并配置");
+            return Ok(());
+        }
+    };
+
+    // 检查是否已集成
+    if manager.is_integrated(&config_path).unwrap_or(false) {
+        println!("CCN 已经集成到 Claude Code");
+        println!("如需重新集成，请先运行 `ccn uninstall`");
+        return Ok(());
+    }
+
+    // 备份配置文件
+    println!("正在备份配置文件...");
+    let backup_path = manager.backup_config(&config_path)?;
+    println!("备份已创建: {:?}", backup_path);
+
+    // 注入 hooks
+    println!("正在注入 hooks...");
+    manager.inject_hooks(&config_path)?;
+    println!("Hooks 已成功注入");
+
+    // 发送测试通知
+    println!("正在发送测试通知...");
+    manager.send_test_notification()?;
+
+    println!("\n✅ CCN 集成成功！");
+    println!("现在当你在 Claude Code 中执行任务时，将收到通知");
+
+    Ok(())
+}
+
+/// 处理 uninstall 命令
+fn handle_uninstall() -> Result<()> {
+    println!("正在卸载 CCN 集成...");
+
+    let manager = IntegrationManager::new();
+
+    // 侦测配置文件
+    let config_path = manager.detect_config_path();
+    let config_path = match config_path {
+        Some(path) => {
+            println!("找到 Claude Code 配置文件: {:?}", path);
+            path
+        }
+        None => {
+            println!("未找到 Claude Code 配置文件");
+            println!("CCN 可能未安装");
+            return Ok(());
+        }
+    };
+
+    // 检查是否已集成
+    if !manager.is_integrated(&config_path).unwrap_or(false) {
+        println!("CCN 未集成到 Claude Code");
+        return Ok(());
+    }
+
+    // 移除 hooks
+    println!("正在移除 hooks...");
+    manager.remove_hooks(&config_path)?;
+
+    println!("\n✅ CCN 集成已移除");
+    println!("配置文件的备份仍保留在原位置");
+
+    Ok(())
+}
+
+/// 构建通知标题
+fn build_title(status: NotificationStatus, cmd: &str) -> String {
+    let status_text = match status {
+        NotificationStatus::Success => "完成",
+        NotificationStatus::Error => "失败",
+        NotificationStatus::Pending => "进行中",
+    };
+
+    // 简化命令显示
+    let short_cmd = if cmd.len() > 30 {
+        format!("{}...", &cmd[..27])
+    } else {
+        cmd.to_string()
+    };
+
+    format!("任务{}", status_text)
+}
+
+/// 构建通知消息
+fn build_message(duration: u64, cmd: &str) -> String {
+    format!("{} (耗时: {}秒)", cmd, duration)
 }
