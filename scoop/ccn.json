@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "homepage": "https://github.com/yangshare/claude-code-notify",
+  "license": "MIT",
+  "description": "Claude Code Notify - 优雅的任务通知工具",
+  "url": "https://github.com/yangshare/claude-code-notify/releases/download/v0.1.0/ccn-windows-x86_64.exe#/ccn.exe",
+  "hash": "placeholder_replace_with_actual_sha256",
+  "bin": "ccn.exe",
+  "checkver": "github",
+  "autoupdate": {
+    "url": "https://github.com/yangshare/claude-code-notify/releases/download/$version/ccn-windows-x86_64.exe#/ccn.exe",
+    "hash": {
+      "url": "$baseurl/ccn-windows-x86_64.exe.sha256",
+      "find": "^([a-fA-F0-9]+)\\s+$basename"
+    }
+  }
+}

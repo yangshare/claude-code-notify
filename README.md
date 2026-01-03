@@ -21,10 +21,31 @@ CCN 是一个轻量级的命令行工具，通过 Windows 原生通知系统为�
 ### 前置要求
 
 - Windows 10/11 或 macOS
-- [Rust 工具链](https://rustup.rs/) (如果从源码构建)
 - [Claude Code](https://claude.ai/code)
 
-### 从源码构建
+### 方式 1: 下载预编译版本（推荐）
+
+从 [Releases 页面](https://github.com/yangshare/claude-code-notify/releases) 下载适合你平台的二进制文件：
+
+- **Windows x64**: `ccn-windows-x86_64.exe`
+- **Windows ARM64**: `ccn-windows-aarch64.exe`
+- **macOS Intel**: `ccn-macos-x86_64`
+- **macOS Apple Silicon**: `ccn-macos-aarch64`
+
+下载后：
+1. 重命名为 `ccn.exe` (Windows) 或 `ccn` (macOS)
+2. 添加到系统 PATH
+
+### 方式 2: 使用 Scoop (Windows)
+
+```powershell
+scoop bucket add ccn https://github.com/yangshare/claude-code-notify
+scoop install ccn
+```
+
+### 方式 3: 从源码构建
+
+需要 [Rust 工具链](https://rustup.rs/)：
 
 ```bash
 # 克隆仓库

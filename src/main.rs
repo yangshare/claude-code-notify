@@ -5,6 +5,7 @@ mod policy;
 mod integration;
 mod wizard;
 mod aggregator;
+mod sound;
 
 use anyhow::Result;
 

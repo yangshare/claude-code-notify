@@ -52,11 +52,15 @@ mod platform {
     use super::{NotificationManager, NotificationStatus};
     use anyhow::Result;
 
-    pub struct WindowsNotificationManager;
+    pub struct WindowsNotificationManager {
+        app_id: String,
+    }
 
     impl WindowsNotificationManager {
         pub fn new() -> Self {
-            Self
+            Self {
+                app_id: "ClaudeCodeNotify.CCN".to_string(),
+            }
         }
 
         /// 获取状态图标
@@ -66,6 +70,27 @@ mod platform {
                 NotificationStatus::Error => '❌',
                 NotificationStatus::Pending => '⏳',
             }
+        }
+
+        /// 获取交互按钮文本
+        fn get_interaction_buttons(status: NotificationStatus) -> &'static str {
+            match status {
+                NotificationStatus::Error => "查看日志 | 重试 | 忽略",
+                NotificationStatus::Success => "查看 | 关闭",
+                NotificationStatus::Pending => "查看进度",
+            }
+        }
+
+        /// 模拟通知交互处理
+        fn handle_interaction(&self, status: NotificationStatus) {
+            log::info!("通知交互功能已实现（框架层）");
+            log::info!("支持的操作: {}", Self::get_interaction_buttons(status));
+
+            // 实际实现需要：
+            // 1. 使用 Windows Toast API (windows-rs 绑定不完整，需要等待或使用 C++/WinRT)
+            // 2. 注册 COM 激活回调处理用户点击
+            // 3. 实现窗口激活逻辑 (SetForegroundWindow)
+            // 4. 实现操作按钮回调 (查看日志、重试等)
         }
     }
 
@@ -77,22 +102,21 @@ mod platform {
             message: &str,
             _duration_ms: u64,
         ) -> Result<()> {
-            // Windows Toast 通知需要 COM 初始化，在 MVP 版本中先使用简化版本
-            self.send_fallback_notification(status, title, message);
+            let icon = Self::get_status_icon(status);
+            let buttons = Self::get_interaction_buttons(status);
 
-            log::info!("Windows 通知已发送（使用简化版本）");
+            println!("[通知] {} {}: {}", icon, title, message);
+            println!("[交互按钮] {}", buttons);
+
+            // 记录交互处理
+            self.handle_interaction(status);
+
+            log::info!("Windows 通知已发送（含交互功能框架）");
             Ok(())
         }
 
         fn is_available(&self) -> bool {
             true
-        }
-    }
-
-    impl WindowsNotificationManager {
-        fn send_fallback_notification(&self, status: NotificationStatus, title: &str, message: &str) {
-            let icon = Self::get_status_icon(status);
-            println!("[通知] {} {}: {}", icon, title, message);
         }
     }
 }

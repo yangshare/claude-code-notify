@@ -11,6 +11,7 @@ use crate::policy::PolicyEngine;
 use crate::integration::IntegrationManager;
 use crate::wizard::ConfigWizard;
 use crate::aggregator::{NotificationAggregator, get_state_file_path};
+use crate::sound::{SoundPlayer, SystemSound};
 
 #[derive(Parser, Debug)]
 #[command(name = "ccn")]
@@ -175,6 +176,9 @@ fn send_single_notification(
     duration: u64,
     config: &Config,
 ) -> Result<()> {
+    // 播放音效
+    play_notification_sound(status, config);
+
     let notifier = get_notification_manager();
 
     // 构建通知内容
@@ -200,6 +204,48 @@ fn send_single_notification(
 
     log::info!("通知已发送");
     Ok(())
+}
+
+/// 播放通知音效
+fn play_notification_sound(status: NotificationStatus, config: &Config) {
+    if !config.sound_enabled {
+        return;
+    }
+
+    let sound_player = SoundPlayer::new(true);
+
+    // 尝试播放自定义音效
+    let template_name = PolicyEngine::new(config.clone()).match_template("");
+    let sound_file = if let Some(name) = &template_name {
+        if name == "default" {
+            &config.templates.default.sound
+        } else {
+            config.templates.custom.get(name)
+                .map(|t| &t.sound)
+                .unwrap_or(&config.templates.default.sound)
+        }
+    } else {
+        &config.templates.default.sound
+    };
+
+    // 如果配置了自定义音效文件
+    if sound_file != "default" && !sound_file.is_empty() {
+        if let Err(e) = sound_player.play_sound_file(sound_file) {
+            log::warn!("播放自定义音效失败: {}", e);
+        }
+        return;
+    }
+
+    // 否则播放系统提示音
+    let system_sound = match status {
+        NotificationStatus::Success => SystemSound::Success,
+        NotificationStatus::Error => SystemSound::Error,
+        NotificationStatus::Pending => SystemSound::Notification,
+    };
+
+    if let Err(e) = sound_player.play_system_sound(system_sound) {
+        log::warn!("播放系统音效失败: {}", e);
+    }
 }
 
 /// 处理 test 命令

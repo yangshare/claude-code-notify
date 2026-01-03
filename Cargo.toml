@@ -27,12 +27,16 @@ thiserror = "1.0"
 # 时间处理
 chrono = "0.4"
 
+# 音频播放
+rodio = { version = "0.19", optional = true }
+
 # Windows 通知 (目标特定)
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
     "Win32_UI_Notifications",
     "Win32_Foundation",
     "Win32_System_Com",
+    "Win32_UI_WindowsAndMessaging",
     "Data_Xml_Dom",
     "Win32_UI_Shell",
     "Win32_System_Com_StructuredStorage",
@@ -50,6 +54,7 @@ crossterm = { version = "0.28", optional = true }
 [features]
 default = []
 tui = ["ratatui", "crossterm"]
+sound = ["rodio"]
 
 [[bin]]
 name = "ccn"
