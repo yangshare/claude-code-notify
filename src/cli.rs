@@ -12,6 +12,7 @@ use crate::integration::IntegrationManager;
 use crate::wizard::ConfigWizard;
 use crate::aggregator::{NotificationAggregator, get_state_file_path};
 use crate::sound::{SoundPlayer, SystemSound};
+use crate::path_manager::PathManager;
 
 #[derive(Parser, Debug)]
 #[command(name = "ccn")]
@@ -313,39 +314,74 @@ fn handle_setup() -> Result<()> {
     let config_path = manager.detect_config_path();
     let config_path = match config_path {
         Some(path) => {
-            println!("找到 Claude Code 配置文件: {:?}", path);
+            println!("✓ 找到 Claude Code 配置文件: {:?}", path);
             path
         }
         None => {
-            println!("未找到 Claude Code 配置文件");
-            println!("请确保 Claude Code 已安装并配置");
+            println!("❌ 未找到 Claude Code 配置文件\n");
+            println!("请确认：");
+            println!("  1. Claude Code 已安装（CLI 或 VS Code 插件）");
+            println!("  2. 配置文件存在于: ~/.claude/settings.json");
+            println!("\n或者设置自定义路径：");
+            println!("  Windows: set CLAUDE_CONFIG_DIR=D:\\custom\\path");
+            println!("  Linux/macOS: export CLAUDE_CONFIG_DIR=/custom/path");
             return Ok(());
         }
     };
 
     // 检查是否已集成
     if manager.is_integrated(&config_path).unwrap_or(false) {
-        println!("CCN 已经集成到 Claude Code");
+        println!("⚠ CCN 已经集成到 Claude Code");
         println!("如需重新集成，请先运行 `ccn uninstall`");
         return Ok(());
+    }
+
+    // 添加到 PATH（仅 Windows）
+    #[cfg(windows)]
+    {
+        println!("正在配置 PATH 环境变量...");
+        let ccn_dir = std::env::current_exe()
+            .context("无法获取可执行文件路径")?
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("无法获取可执行文件目录"))?
+            .to_path_buf();
+
+        match PathManager::add_to_path(&ccn_dir) {
+            Ok(true) => {
+                println!("✓ 已将 CCN 添加到系统 PATH");
+            }
+            Ok(false) => {
+                println!("ℹ PATH 已包含 CCN 目录，跳过");
+            }
+            Err(e) => {
+                println!("⚠ 无法修改 PATH: {}", e);
+                println!("请手动添加到 PATH: {:?}", ccn_dir);
+            }
+        }
     }
 
     // 备份配置文件
     println!("正在备份配置文件...");
     let backup_path = manager.backup_config(&config_path)?;
-    println!("备份已创建: {:?}", backup_path);
+    println!("✓ 备份已创建: {:?}", backup_path);
 
     // 注入 hooks
     println!("正在注入 hooks...");
     manager.inject_hooks(&config_path)?;
-    println!("Hooks 已成功注入");
+    println!("✓ Hooks 已成功注入");
 
     // 发送测试通知
     println!("正在发送测试通知...");
     manager.send_test_notification()?;
 
     println!("\n✅ CCN 集成成功！");
-    println!("现在当你在 Claude Code 中执行任务时，将收到通知");
+
+    #[cfg(windows)]
+    {
+        println!("\n⚠ 重要提示：");
+        println!("请重启您的终端或 VS Code，以使 PATH 环境变量生效。");
+        println!("重启后，hooks 将自动生效，您会收到任务完成通知。");
+    }
 
     Ok(())
 }
@@ -360,11 +396,11 @@ fn handle_uninstall() -> Result<()> {
     let config_path = manager.detect_config_path();
     let config_path = match config_path {
         Some(path) => {
-            println!("找到 Claude Code 配置文件: {:?}", path);
+            println!("✓ 找到 Claude Code 配置文件: {:?}", path);
             path
         }
         None => {
-            println!("未找到 Claude Code 配置文件");
+            println!("❌ 未找到 Claude Code 配置文件");
             println!("CCN 可能未安装");
             return Ok(());
         }
@@ -372,16 +408,45 @@ fn handle_uninstall() -> Result<()> {
 
     // 检查是否已集成
     if !manager.is_integrated(&config_path).unwrap_or(false) {
-        println!("CCN 未集成到 Claude Code");
+        println!("⚠ CCN 未集成到 Claude Code");
         return Ok(());
     }
 
     // 移除 hooks
     println!("正在移除 hooks...");
     manager.remove_hooks(&config_path)?;
+    println!("✓ Hooks 已移除");
+
+    // 从 PATH 移除（仅 Windows）
+    #[cfg(windows)]
+    {
+        println!("正在清理 PATH 环境变量...");
+        let ccn_dir = std::env::current_exe()
+            .context("无法获取可执行文件路径")?
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("无法获取可执行文件目录"))?
+            .to_path_buf();
+
+        match PathManager::remove_from_path(&ccn_dir) {
+            Ok(true) => {
+                println!("✓ 已从系统 PATH 移除 CCN");
+            }
+            Ok(false) => {
+                println!("ℹ PATH 中不包含 CCN 目录");
+            }
+            Err(e) => {
+                println!("⚠ 无法清理 PATH: {}", e);
+            }
+        }
+    }
 
     println!("\n✅ CCN 集成已移除");
     println!("配置文件的备份仍保留在原位置");
+
+    #[cfg(windows)]
+    {
+        println!("\n⚠ 请重启终端以使 PATH 更新生效");
+    }
 
     Ok(())
 }

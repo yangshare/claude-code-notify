@@ -17,39 +17,39 @@ impl IntegrationManager {
 
     /// 侦测 Claude Code 配置文件
     pub fn detect_config_path(&self) -> Option<PathBuf> {
-        #[cfg(windows)]
-        let paths = vec![
-            std::env::var("APPDATA")
-                .ok()
-                .map(|p| PathBuf::from(p).join("Claude").join("config.json")),
-            std::env::var("USERPROFILE")
-                .ok()
-                .map(|p| PathBuf::from(p).join(".claude").join("config.json")),
-        ];
+        // 获取配置目录（支持 CLAUDE_CONFIG_DIR 环境变量）
+        let config_dir = Self::get_config_dir()?;
+        let settings_file = config_dir.join("settings.json");
 
-        #[cfg(target_os = "macos")]
-        let paths = vec![
-            std::env::var("HOME")
-                .ok()
-                .map(|p| PathBuf::from(p).join(".claude").join("config.json")),
-        ];
+        if settings_file.exists() {
+            Some(settings_file)
+        } else {
+            None
+        }
+    }
 
-        #[cfg(not(any(windows, target_os = "macos")))]
-        let paths = vec![
-            std::env::var("HOME")
-                .ok()
-                .map(|p| PathBuf::from(p).join(".claude").join("config.json")),
-        ];
-
-        for path_option in paths {
-            if let Some(path) = path_option {
-                if path.exists() {
-                    return Some(path);
-                }
-            }
+    /// 获取 Claude Code 配置目录
+    fn get_config_dir() -> Option<PathBuf> {
+        // 优先使用环境变量
+        if let Ok(custom_dir) = std::env::var("CLAUDE_CONFIG_DIR") {
+            return Some(PathBuf::from(custom_dir));
         }
 
-        None
+        // 使用默认路径 ~/.claude
+        Self::home_dir()?.join(".claude").into()
+    }
+
+    /// 获取主目录
+    fn home_dir() -> Option<PathBuf> {
+        #[cfg(windows)]
+        {
+            std::env::var("USERPROFILE").ok().map(PathBuf::from)
+        }
+
+        #[cfg(not(windows))]
+        {
+            std::env::var("HOME").ok().map(PathBuf::from)
+        }
     }
 
     /// 备份配置文件
