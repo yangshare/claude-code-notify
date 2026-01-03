@@ -6,6 +6,7 @@ mod integration;
 mod wizard;
 mod aggregator;
 mod sound;
+#[cfg(windows)]
 mod path_manager;
 
 use anyhow::Result;
