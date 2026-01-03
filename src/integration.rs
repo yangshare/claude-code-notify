@@ -86,17 +86,65 @@ impl IntegrationManager {
             .as_object_mut()
             .unwrap();
 
-        // 注入 PostCommand hook
-        hooks.insert(
-            "PostCommand".to_string(),
-            json!("ccn notify --status=success --duration=$DURATION --cmd='$COMMAND' || true")
-        );
+        // 清理旧的 hooks
+        hooks.remove("PostCommand");
+        hooks.remove("CommandError");
 
-        // 注入 CommandError hook
-        hooks.insert(
-            "CommandError".to_string(),
-            json!("ccn notify --status=error --duration=$DURATION --cmd='$COMMAND' || true")
-        );
+        // 定义新的 hooks
+        let success_hook = json!({
+            "matcher": "Bash",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "ccn notify --status=success --duration=$DURATION --cmd='$COMMAND' || true"
+                }
+            ]
+        });
+
+        let failure_hook = json!({
+            "matcher": "Bash",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "ccn notify --status=error --duration=$DURATION --cmd='$COMMAND' || true"
+                }
+            ]
+        });
+
+        // 注入 PostToolUse hook
+        // 如果不存在则创建数组，如果存在且是数组则追加（避免重复）
+        let post_tool_use = hooks.entry("PostToolUse").or_insert_with(|| json!([]));
+        if let Some(arr) = post_tool_use.as_array_mut() {
+            // 简单去重检查：检查是否已经包含相同的 command
+            let has_hook = arr.iter().any(|h| {
+                h["hooks"].as_array().map_or(false, |cmds| {
+                    cmds.iter().any(|cmd| {
+                        cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify --status=success"))
+                    })
+                })
+            });
+            
+            if !has_hook {
+                arr.push(success_hook);
+            }
+        }
+
+        // 注入 PostToolUseFailure hook
+        let post_tool_use_failure = hooks.entry("PostToolUseFailure").or_insert_with(|| json!([]));
+        if let Some(arr) = post_tool_use_failure.as_array_mut() {
+             // 简单去重检查
+             let has_hook = arr.iter().any(|h| {
+                h["hooks"].as_array().map_or(false, |cmds| {
+                    cmds.iter().any(|cmd| {
+                        cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify --status=error"))
+                    })
+                })
+            });
+
+            if !has_hook {
+                arr.push(failure_hook);
+            }
+        }
 
         // 写回配置文件
         let updated_content = serde_json::to_string_pretty(&config)
@@ -135,7 +183,39 @@ impl IntegrationManager {
 
         // 移除 hooks
         if let Some(obj) = config.as_object_mut() {
-            obj.remove("hooks");
+            if let Some(hooks) = obj.get_mut("hooks").and_then(|h| h.as_object_mut()) {
+                // 移除旧的 legacy hooks
+                hooks.remove("PostCommand");
+                hooks.remove("CommandError");
+
+                // 移除 PostToolUse 中的 ccn hooks
+                if let Some(arr) = hooks.get_mut("PostToolUse").and_then(|v| v.as_array_mut()) {
+                    arr.retain(|h| {
+                        !h["hooks"].as_array().map_or(false, |cmds| {
+                            cmds.iter().any(|cmd| {
+                                cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify"))
+                            })
+                        })
+                    });
+                    if arr.is_empty() {
+                        hooks.remove("PostToolUse");
+                    }
+                }
+
+                // 移除 PostToolUseFailure 中的 ccn hooks
+                if let Some(arr) = hooks.get_mut("PostToolUseFailure").and_then(|v| v.as_array_mut()) {
+                    arr.retain(|h| {
+                        !h["hooks"].as_array().map_or(false, |cmds| {
+                            cmds.iter().any(|cmd| {
+                                cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify"))
+                            })
+                        })
+                    });
+                    if arr.is_empty() {
+                        hooks.remove("PostToolUseFailure");
+                    }
+                }
+            }
         }
 
         // 写回配置文件
@@ -160,8 +240,23 @@ impl IntegrationManager {
         if let Some(obj) = config.as_object() {
             if let Some(hooks) = obj.get("hooks") {
                 if let Some(hooks_obj) = hooks.as_object() {
-                    return Ok(hooks_obj.contains_key("PostCommand") ||
-                               hooks_obj.contains_key("CommandError"));
+                    let has_success = hooks_obj.get("PostToolUse")
+                        .and_then(|v| v.as_array())
+                        .map_or(false, |arr| {
+                            arr.iter().any(|h| {
+                                h["hooks"].as_array().map_or(false, |cmds| {
+                                    cmds.iter().any(|cmd| {
+                                        cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify"))
+                                    })
+                                })
+                            })
+                        });
+                    
+                    // 同时也检查旧的配置，以便向后兼容检测
+                    let has_legacy = hooks_obj.contains_key("PostCommand") ||
+                                   hooks_obj.contains_key("CommandError");
+
+                    return Ok(has_success || has_legacy);
                 }
             }
         }
