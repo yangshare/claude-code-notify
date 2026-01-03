@@ -86,18 +86,37 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
-      - name: Create SHA256 checksums
+      - name: Prepare release assets
         run: |
+          mkdir release_assets
           cd artifacts
           for dir in */; do
+            # 移除目录名的尾部斜杠，得到期望的文件名
+            asset_name=${dir%/}
+            
+            # 进入 artifact 目录
             cd "$dir"
-            for file in *; do
-              if [ -f "$file" ]; then
-                sha256sum "$file" > "$file.sha256"
-              fi
-            done
+            
+            # 查找二进制文件（ccn 或 ccn.exe）并移动重命名
+            if [ -f "ccn.exe" ]; then
+              mv ccn.exe "../../release_assets/$asset_name"
+            elif [ -f "ccn" ]; then
+              mv ccn "../../release_assets/$asset_name"
+            fi
+            
             cd ..
           done
+          
+          # 生成 checksums
+          cd ../release_assets
+          for file in *; do
+            if [ -f "$file" ]; then
+              sha256sum "$file" > "$file.sha256"
+            fi
+          done
+          
+          # 列出最终文件以供调试
+          ls -la
 
       - name: Extract version from tag
         id: get_version
@@ -110,7 +129,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: artifacts/*/*
+          files: release_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
