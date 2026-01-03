@@ -32,17 +32,13 @@ rodio = { version = "0.19", optional = true }
 
 # Windows 通知 (目标特定)
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = [
-    "Win32_UI_Notifications",
+windows = { version = "0.61", features = [
     "Win32_Foundation",
-    "Win32_System_Com",
+    "Win32_UI_Notifications",
     "Win32_UI_WindowsAndMessaging",
     "Data_Xml_Dom",
-    "Win32_UI_Shell",
-    "Win32_System_Com_StructuredStorage",
-    "Win32_System_Registry",
     "UI_Notifications",
-    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Registry",
 ] }
 winreg = "0.52"
 

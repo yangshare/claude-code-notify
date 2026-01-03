@@ -9,7 +9,7 @@ CCN 是一个轻量级的命令行工具，通过 Windows 原生通知系统为�
 
 ## 特性
 
-- **原生通知体验** - 使用 Windows 10/11 通知中心，状态感知图标（✅❌⏳）
+- **原生通知体验** - 使用 Windows 11 Toast 通知，状态感知图标（✅❌⏳）
 - **智能通知策略** - 可配置的阈值过滤，避免短时间任务打扰
 - **通知聚合** - 自动合并短时间内的多条通知
 - **零配置自动集成** - 一条命令完成所有设置
@@ -20,7 +20,7 @@ CCN 是一个轻量级的命令行工具，通过 Windows 原生通知系统为�
 
 ### 前置要求
 
-- Windows 10/11 或 macOS
+- **Windows 11** 或 macOS
 - [Claude Code](https://claude.ai/code)
 
 ### 方式 1: 下载预编译版本（推荐）
@@ -298,12 +298,20 @@ logging:
 
 **解决方案**：
 
-1. **检查通知权限（Windows 10/11）**
+1. **检查通知权限（Windows 11）**
    - 设置 > 系统 > 通知和操作
    - 确保通知已启用
    - 确允许应用发送通知
 
-2. **检查专注助手设置**
+2. **检查 AUMID 和快捷方式**
+   - CCN 会自动创建 AUMID: `ClaudeCodeNotify.CCN`
+   - 如果通知仍然不显示，尝试：
+     ```bash
+     ccn test
+     ```
+   - 如果首次运行，系统可能会提示是否允许通知
+
+3. **检查专注助手设置**
    - 配置文件中的 `focus_assistant_mode` 设置
    - 如果设置为 `respect`，在专注模式下可能不显示通知
    - 修改为 `always` 强制显示所有通知
@@ -402,7 +410,7 @@ src/
 - **Rust** - 高性能、内存安全
 - **clap** - CLI 参数解析
 - **serde_yaml** - YAML 配置解析
-- **windows-rs** - Windows 原生通知 API
+- **windows** - 微软官方 Windows API 绑定（WinRT Toast 通知）
 
 ## 路线图
 
@@ -421,7 +429,6 @@ src/
 
 - [ ] macOS 原生通知支持
 - [ ] 通知交互按钮（查看日志、重试等）
-- [ ] 真正的 Windows Toast 通知（当前是简化版本）
 - [ ] 配置热重载
 - [ ] 单元测试覆盖率提升
 
@@ -445,7 +452,7 @@ src/
 
 - [Claude Code](https://claude.ai/code) - AI 驱动的编码助手
 - [clap](https://github.com/clap-rs/clap) - Rust CLI 框架
-- [windows-rs](https://github.com/microsoft/windows-rs) - Windows API 绑定
+- [win32_notif](https://github.com/ahq-softwares/win32_notif) - Windows Toast 通知库
 
 ---
 
