@@ -16,7 +16,7 @@ struct AggregationState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct AggregatedNotification {
+pub struct AggregatedNotification {
     status: String,
     duration: u64,
     cmd: String,
@@ -24,7 +24,7 @@ struct AggregatedNotification {
 }
 
 impl AggregationState {
-    fn new(window: u64) -> Self {
+    fn new(_window: u64) -> Self {
         Self {
             notifications: Vec::new(),
             window_start: now(),
@@ -100,6 +100,7 @@ impl NotificationAggregator {
     }
 
     /// 刷新待发送的通知
+    #[allow(dead_code)]
     pub fn flush(&self) -> Result<Option<AggregatedResult>> {
         let state = self.load_state()?;
 
@@ -113,6 +114,7 @@ impl NotificationAggregator {
     }
 
     /// 检查是否有待发送的通知
+    #[allow(dead_code)]
     pub fn has_pending(&self) -> bool {
         if let Ok(state) = self.load_state() {
             !state.notifications.is_empty() && !state.is_expired(self.window_ms)
@@ -136,6 +138,7 @@ impl NotificationAggregator {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn clear_state(&self) -> Result<()> {
         if self.state_file.exists() {
             fs::remove_file(&self.state_file)?;

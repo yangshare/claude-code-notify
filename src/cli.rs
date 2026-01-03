@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use anyhow::{Context, Result};
 
 use crate::config::{load_config, Config};
-use crate::notification::{get_notification_manager, NotificationManager, NotificationStatus};
+use crate::notification::{get_notification_manager, NotificationStatus};
 use crate::policy::PolicyEngine;
 use crate::integration::IntegrationManager;
 use crate::wizard::ConfigWizard;
@@ -387,18 +387,11 @@ fn handle_uninstall() -> Result<()> {
 }
 
 /// 构建通知标题
-fn build_title(status: NotificationStatus, cmd: &str) -> String {
+fn build_title(status: NotificationStatus, _cmd: &str) -> String {
     let status_text = match status {
         NotificationStatus::Success => "完成",
         NotificationStatus::Error => "失败",
         NotificationStatus::Pending => "进行中",
-    };
-
-    // 简化命令显示
-    let short_cmd = if cmd.len() > 30 {
-        format!("{}...", &cmd[..27])
-    } else {
-        cmd.to_string()
     };
 
     format!("任务{}", status_text)

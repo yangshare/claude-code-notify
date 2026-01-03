@@ -4,7 +4,6 @@
 
 use crate::config::Config;
 use crate::notification::NotificationStatus;
-use anyhow::Result;
 
 /// 策略引擎
 pub struct PolicyEngine {
@@ -48,11 +47,13 @@ impl PolicyEngine {
     }
 
     /// 检查是否应该聚合通知
+    #[allow(dead_code)]
     pub fn should_aggregate(&self) -> bool {
         self.config.aggregation.enabled
     }
 
     /// 获取聚合窗口时间（毫秒）
+    #[allow(dead_code)]
     pub fn aggregation_window(&self) -> u64 {
         self.config.aggregation.window
     }

@@ -53,6 +53,7 @@ mod platform {
     use anyhow::Result;
 
     pub struct WindowsNotificationManager {
+        #[allow(dead_code)]
         app_id: String,
     }
 
