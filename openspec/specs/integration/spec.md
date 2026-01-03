@@ -1,7 +1,8 @@
-# 集成管理规范
+# integration Specification
 
-## 修改需求
-
+## Purpose
+TBD - created by archiving change fix-integration-config. Update Purpose after archive.
+## 需求
 ### 需求：配置文件路径检测符合官方规范
 IntegrationManager 必须检测符合 Claude Code 官方规范的配置文件路径（`~/.claude/settings.json`），而不是当前错误的路径（`config.json` 和 `%APPDATA%\Claude\`）。
 
@@ -49,8 +50,6 @@ IntegrationManager 必须读写 `settings.json` 而不是 `config.json`。
 - **那么** 必须成功解析 JSON 格式
 - **且** 必须保留现有配置不变
 - **且** 必须仅添加 hooks 字段
-
-## 新增需求
 
 ### 需求：Windows PATH 环境变量自动管理
 setup 命令必须自动将 ccn.exe 所在目录添加到 Windows PATH 环境变量，uninstall 命令必须移除相关条目。
@@ -151,3 +150,4 @@ setup 和 uninstall 命令必须按照正确的顺序执行操作，确保集成
   - ccn.exe 不在 PATH 中（请重启终端）
   - 防火墙或杀毒软件阻止
 - **且** 必须提供手动测试命令
+

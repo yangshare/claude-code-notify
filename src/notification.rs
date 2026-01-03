@@ -51,47 +51,70 @@ pub fn get_notification_manager() -> Box<dyn NotificationManager> {
 mod platform {
     use super::{NotificationManager, NotificationStatus};
     use anyhow::Result;
+    use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
-    pub struct WindowsNotificationManager {
-        #[allow(dead_code)]
-        app_id: String,
-    }
+    pub struct WindowsNotificationManager;
 
     impl WindowsNotificationManager {
         pub fn new() -> Self {
-            Self {
-                app_id: "ClaudeCodeNotify.CCN".to_string(),
-            }
+            Self
         }
 
-        /// 获取状态图标
-        fn get_status_icon(status: NotificationStatus) -> char {
+        /// 获取状态对应的图标
+        fn get_status_icon(status: NotificationStatus) -> &'static str {
             match status {
-                NotificationStatus::Success => '✅',
-                NotificationStatus::Error => '❌',
-                NotificationStatus::Pending => '⏳',
+                NotificationStatus::Success => "✅",
+                NotificationStatus::Error => "❌",
+                NotificationStatus::Pending => "⏳",
             }
         }
 
-        /// 获取交互按钮文本
-        fn get_interaction_buttons(status: NotificationStatus) -> &'static str {
+        /// 获取状态文本
+        fn get_status_text(status: NotificationStatus) -> &'static str {
             match status {
-                NotificationStatus::Error => "查看日志 | 重试 | 忽略",
-                NotificationStatus::Success => "查看 | 关闭",
-                NotificationStatus::Pending => "查看进度",
+                NotificationStatus::Success => "成功",
+                NotificationStatus::Error => "错误",
+                NotificationStatus::Pending => "进行中",
             }
         }
 
-        /// 模拟通知交互处理
-        fn handle_interaction(&self, status: NotificationStatus) {
-            log::info!("通知交互功能已实现（框架层）");
-            log::info!("支持的操作: {}", Self::get_interaction_buttons(status));
+        /// 使用 PowerShell 发送系统托盘通知
+        fn send_powershell_notification(&self, title: &str, message: &str) -> Result<()> {
+            // 转义特殊字符
+            let escaped_title = title
+                .replace('\\', "\\\\")
+                .replace('\"', "\\\"")
+                .replace('`', "``");
+            let escaped_message = message
+                .replace('\\', "\\\\")
+                .replace('\"', "\\\"")
+                .replace('`', "``");
 
-            // 实际实现需要：
-            // 1. 使用 Windows Toast API (windows-rs 绑定不完整，需要等待或使用 C++/WinRT)
-            // 2. 注册 COM 激活回调处理用户点击
-            // 3. 实现窗口激活逻辑 (SetForegroundWindow)
-            // 4. 实现操作按钮回调 (查看日志、重试等)
+            // PowerShell 脚本：创建系统托盘气泡通知
+            let script = format!(
+                "Add-Type -AssemblyName System.Windows.Forms; \
+                 $n = New-Object System.Windows.Forms.NotifyIcon; \
+                 $n.Icon = [System.Drawing.SystemIcons]::Information; \
+                 $n.BalloonTipTitle = '{}'; \
+                 $n.BalloonTipText = '{}'; \
+                 $n.Visible = $true; \
+                 $n.ShowBalloonTip(10000); \
+                 Start-Sleep -Seconds 10; \
+                 $n.Dispose()",
+                escaped_title, escaped_message
+            );
+
+            let output = Command::new("powershell")
+                .args(["-ExecutionPolicy", "Bypass", "-Command", &script])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output();
+
+            match output {
+                Ok(o) if o.status.success() => Ok(()),
+                Ok(e) => Err(anyhow::anyhow!("PowerShell 通知失败: {}", String::from_utf8_lossy(&e.stderr))),
+                Err(e) => Err(anyhow::anyhow!("无法执行 PowerShell: {}", e)),
+            }
         }
     }
 
@@ -103,20 +126,28 @@ mod platform {
             message: &str,
             _duration_ms: u64,
         ) -> Result<()> {
+            // 格式化标题
             let icon = Self::get_status_icon(status);
-            let buttons = Self::get_interaction_buttons(status);
+            let status_text = Self::get_status_text(status);
+            let formatted_title = format!("{}{} - {}", icon, status_text, title);
 
-            println!("[通知] {} {}: {}", icon, title, message);
-            println!("[交互按钮] {}", buttons);
-
-            // 记录交互处理
-            self.handle_interaction(status);
-
-            log::info!("Windows 通知已发送（含交互功能框架）");
-            Ok(())
+            // 发送 PowerShell 通知
+            match self.send_powershell_notification(&formatted_title, message) {
+                Ok(_) => {
+                    log::info!("通知已发送: {}", formatted_title);
+                    Ok(())
+                }
+                Err(e) => {
+                    log::warn!("PowerShell 通知失败: {}", e);
+                    // 降级到控制台输出
+                    println!("[通知] {} {}: {}", icon, title, message);
+                    Ok(())
+                }
+            }
         }
 
         fn is_available(&self) -> bool {
+            // PowerShell 在 Windows 上总是可用
             true
         }
     }

@@ -21,11 +21,11 @@
 - [x] 3.4 改进用户提示：告知用户需要重启终端或 VS Code 使 PATH 生效
 
 ## 4. 测试与验证
-- [ ] 4.1 手动测试：Windows 上配置文件路径检测是否正确
-- [ ] 4.2 手动测试：`ccn setup` 后 PATH 是否正确添加
-- [ ] 4.3 手动测试：`ccn uninstall` 后 PATH 是否正确移除
-- [ ] 4.4 集成测试：验证 hooks 在 Claude Code 中是否正常触发
-- [ ] 4.5 回归测试：确保现有通知功能不受影响
+- [x] 4.1 手动测试：Windows 上配置文件路径检测是否正确
+- [x] 4.2 手动测试：`ccn setup` 后 PATH 是否正确添加
+- [x] 4.3 手动测试：`ccn uninstall` 后 PATH 是否正确移除
+- [x] 4.4 集成测试：验证 hooks 在 Claude Code 中是否正常触发
+- [x] 4.5 回归测试：确保现有通知功能不受影响
 
 ## 5. 文档更新
 - [x] 5.1 更新 README：说明 Windows 上需要重启终端使 PATH 生效
