@@ -49,6 +49,9 @@ enum Commands {
     /// 卸载集成
     Uninstall,
 
+    /// 验证集成
+    Verify,
+
     /// 显示当前配置
     Config,
 
@@ -75,6 +78,10 @@ pub fn run() -> Result<()> {
 
         Commands::Uninstall => {
             handle_uninstall()
+        }
+
+        Commands::Verify => {
+            handle_verify()
         }
 
         Commands::Config => {
@@ -448,6 +455,29 @@ fn handle_uninstall() -> Result<()> {
         println!("\n⚠ 请重启终端以使 PATH 更新生效");
     }
 
+    Ok(())
+}
+
+/// 处理 verify 命令
+fn handle_verify() -> Result<()> {
+    println!("正在验证 CCN 集成...\n");
+
+    let manager = IntegrationManager::new();
+
+    // 验证集成
+    let result = manager.verify_integration()?;
+
+    // 显示结果
+    println!("集成验证结果：");
+    println!("  ccn 命令在 PATH 中: {}", if result.ccn_in_path { "✓" } else { "✗" });
+    println!("  测试通知发送: {}", if result.test_notification_sent { "✓" } else { "✗" });
+
+    if let Some(error) = result.error {
+        println!("\n错误: {}", error);
+        return Err(anyhow::anyhow!("集成验证失败"));
+    }
+
+    println!("\n✅ 集成验证通过！CCN 已正确配置。");
     Ok(())
 }
 

@@ -73,9 +73,12 @@ ccn setup
 
 这个命令会：
 - 自动侦测 Claude Code 配置文件位置
+- 将 ccn.exe 添加到系统 PATH（Windows）
 - 创建配置文件备份
 - 注入必要的 hooks 配置
 - 发送测试通知验证安装
+
+> **⚠️ Windows 用户注意**：运行 `ccn setup` 后，**必须重启您的终端或 VS Code**，才能使 PATH 环境变量生效。重启后，hooks 将自动生效。
 
 ### 2. 配置通知规则
 
@@ -99,7 +102,17 @@ ccn init
 ccn test
 ```
 
-### 4. 查看当前配置
+### 4. 验证集成
+
+```bash
+ccn verify
+```
+
+验证 CCN 是否正确集成，包括：
+- 检查 ccn 命令是否在 PATH 中
+- 测试通知功能是否正常工作
+
+### 5. 查看当前配置
 
 ```bash
 ccn config
@@ -126,7 +139,12 @@ ccn notify --status pending --duration 0 --cmd "deploying..."
 ccn uninstall
 ```
 
-这会从 Claude Code 配置中移除 CCN 的 hooks，但保留备份文件。
+这会：
+- 从 Claude Code 配置中移除 CCN 的 hooks
+- 从系统 PATH 中移除 ccn.exe（Windows）
+- 保留配置文件备份
+
+> **⚠️ Windows 用户注意**：运行 `ccn uninstall` 后，**建议重启终端**以使 PATH 更新生效。
 
 ## 配置文件
 
@@ -173,6 +191,146 @@ logging:
   level: info  # debug, info, warn, error
   file: ""  # 空表示仅输出到 stderr
 ```
+
+## 故障排查
+
+### 问题：运行 `ccn setup` 后找不到 Claude Code 配置文件
+
+**症状**：
+```
+❌ 未找到 Claude Code 配置文件
+```
+
+**解决方案**：
+
+1. **确认 Claude Code 已安装**
+   - 如果使用 VS Code 插件，确保已安装并运行过 Claude Code
+   - 如果使用 CLI 版本，确保已正确安装
+
+2. **检查默认配置路径**
+   - 默认路径为：`~/.claude/settings.json`
+   - Windows：`C:\Users\<用户名>\.claude\settings.json`
+   - macOS/Linux：`~/.claude/settings.json`
+
+3. **使用自定义配置路径**
+   - 如果 Claude Code 配置在其他位置，设置环境变量：
+     ```bash
+     # Windows PowerShell
+     $env:CLAUDE_CONFIG_DIR="D:\custom\path"
+     ccn setup
+
+     # Windows CMD
+     set CLAUDE_CONFIG_DIR=D:\custom\path
+     ccn setup
+
+     # Linux/macOS
+     export CLAUDE_CONFIG_DIR=/custom/path
+     ccn setup
+     ```
+
+### 问题：hooks 不工作，收不到通知
+
+**症状**：
+- 任务完成后没有收到通知
+- 在 Claude Code 中执行命令无响应
+
+**解决方案**：
+
+1. **验证 PATH 配置（Windows 用户）**
+   ```bash
+   # 运行验证命令
+   ccn verify
+   ```
+   - 如果提示 "ccn 命令不在 PATH 中"，说明 PATH 未生效
+   - **重启您的终端或 VS Code** 使 PATH 生效
+   - 重启后再次运行 `ccn verify` 验证
+
+2. **检查 hooks 是否正确注入**
+   - 查看 `~/.claude/settings.json`
+   - 确认 `hooks` 字段存在且包含 `PostCommand` 和 `CommandError`
+
+3. **手动测试通知**
+   ```bash
+   ccn test
+   ```
+   - 如果测试通知正常显示，说明通知系统工作正常
+   - 问题可能出在 hooks 配置或 Claude Code 集成
+
+4. **检查日志**
+   - 设置环境变量启用详细日志：
+     ```bash
+     # Windows
+     set RUST_LOG=debug
+     ccn notify --status=success --duration=1 --cmd=test
+
+     # Linux/macOS
+     RUST_LOG=debug ccn notify --status=success --duration=1 --cmd=test
+     ```
+
+### 问题：Windows 上无法修改 PATH
+
+**症状**：
+```
+⚠ 无法修改 PATH: ...
+```
+
+**解决方案**：
+
+1. **手动添加到 PATH**
+   - 找到 ccn.exe 所在目录
+   - 添加到系统 PATH：
+     - 按 `Win + X`，选择"系统"
+     - 点击"高级系统设置"
+     - 点击"环境变量"
+     - 在"用户变量"中找到 `Path`
+     - 点击"编辑"，添加 ccn.exe 所在目录
+   - 重启终端
+
+2. **检查权限**
+   - 确保当前用户有权限修改用户环境变量
+   - 不需要管理员权限（修改的是用户级别 PATH）
+
+### 问题：通知不显示
+
+**症状**：
+- 执行命令后看不到通知
+- `ccn test` 没有反应
+
+**解决方案**：
+
+1. **检查通知权限（Windows 10/11）**
+   - 设置 > 系统 > 通知和操作
+   - 确保通知已启用
+   - 确允许应用发送通知
+
+2. **检查专注助手设置**
+   - 配置文件中的 `focus_assistant_mode` 设置
+   - 如果设置为 `respect`，在专注模式下可能不显示通知
+   - 修改为 `always` 强制显示所有通知
+
+3. **查看 Windows 通知中心**
+   - 点击任务栏右下角的通知图标
+   - 检查通知是否在历史记录中
+
+### 问题：配置文件格式错误
+
+**症状**：
+```
+配置文件 JSON 格式错误
+```
+
+**解决方案**：
+
+1. **恢复备份**
+   - `ccn setup` 会自动创建备份
+   - 备份文件位于：`settings.json.bak.<时间戳>`
+   - 删除当前配置文件，重命名备份文件
+
+2. **重新运行 setup**
+   ```bash
+   ccn uninstall
+   ccn setup
+   ```
 
 ## 功能详解
 

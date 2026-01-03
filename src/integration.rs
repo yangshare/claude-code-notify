@@ -168,4 +168,59 @@ impl IntegrationManager {
 
         Ok(false)
     }
+
+    /// 验证集成：测试 hooks 命令是否可执行
+    pub fn verify_integration(&self) -> Result<VerificationResult> {
+        use std::process::Command;
+
+        // 检查 ccn 命令是否在 PATH 中
+        let ccn_available = match Command::new("ccn")
+            .arg("--version")
+            .output()
+        {
+            Ok(output) => output.status.success(),
+            Err(_) => false,
+        };
+
+        if !ccn_available {
+            return Ok(VerificationResult {
+                ccn_in_path: false,
+                test_notification_sent: false,
+                error: Some("ccn 命令不在 PATH 中，请重新运行 `ccn setup` 并重启终端".to_string()),
+            });
+        }
+
+        // 尝试发送测试通知
+        let test_result = Command::new("ccn")
+            .args(&["notify", "--status=success", "--duration=1", "--cmd=test"])
+            .output();
+
+        let test_success = match test_result {
+            Ok(output) => output.status.success(),
+            Err(e) => {
+                return Ok(VerificationResult {
+                    ccn_in_path: true,
+                    test_notification_sent: false,
+                    error: Some(format!("测试通知失败: {}", e)),
+                });
+            }
+        };
+
+        Ok(VerificationResult {
+            ccn_in_path: true,
+            test_notification_sent: test_success,
+            error: if test_success { None } else { Some("测试通知执行失败".to_string()) },
+        })
+    }
+}
+
+/// 集成验证结果
+#[derive(Debug)]
+pub struct VerificationResult {
+    /// ccn 命令是否在 PATH 中
+    pub ccn_in_path: bool,
+    /// 测试通知是否成功发送
+    pub test_notification_sent: bool,
+    /// 错误信息（如果有）
+    pub error: Option<String>,
 }
