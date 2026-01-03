@@ -18,17 +18,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -52,16 +46,11 @@ jobs:
 
   lint:
     name: Lint and Format
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -75,9 +64,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ubuntu-latest-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: windows-latest-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ubuntu-latest-cargo-
+            windows-latest-cargo-
 
       - name: Run rustfmt
         run: cargo fmt --all -- --check
@@ -92,7 +81,7 @@ jobs:
 
   audit:
     name: Security Audit
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -108,16 +97,11 @@ jobs:
 
   build-check:
     name: Build Check (Minimal)
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
