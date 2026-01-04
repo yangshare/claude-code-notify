@@ -56,8 +56,15 @@ jobs:
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
           echo "New version: $new_tag"
 
-          # 创建并推送 tag
-          git tag -a "$new_tag" -m "Release $new_tag"
+          # 更新 Cargo.toml 中的版本号
+          sed -i "s/^version = .*/version = \"$new_version\"/" Cargo.toml
+
+          # 提交 Cargo.toml 修改
+          git add Cargo.toml
+          git commit -m "chore: bump version to $new_version"
+
+          # 推送提交和 tag
+          git push origin HEAD:main
           git push origin "$new_tag"
 
   build:
@@ -189,6 +196,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Generate Scoop manifest
         run: |
