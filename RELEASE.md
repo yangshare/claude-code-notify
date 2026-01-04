@@ -147,5 +147,4 @@ A: 编辑 `.github/workflows/release.yml` 文件。
 
 - GitHub Actions: https://github.com/yangshare/claude-code-notify/actions
 - Releases: https://github.com/yangshare/claude-code-notify/releases
-- CI 配置: `.github/workflows/ci.yml`
 - Release 配置: `.github/workflows/release.yml`
