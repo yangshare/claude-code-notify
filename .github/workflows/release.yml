@@ -61,7 +61,10 @@ jobs:
 
           # 提交 Cargo.toml 修改
           git add Cargo.toml
-          git commit -m "chore: bump version to $new_version"
+          git commit -m "chore: bump version to $new_version [skip ci]"
+
+          # 创建 tag
+          git tag "$new_tag"
 
           # 推送提交和 tag
           git push origin HEAD:main
