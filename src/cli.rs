@@ -501,3 +501,45 @@ fn build_title(status: NotificationStatus, _cmd: &str) -> String {
 fn build_message(duration: u64, cmd: &str) -> String {
     format!("{} (耗时: {}秒)", cmd, duration)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::notification::NotificationStatus;
+
+    #[test]
+    fn test_build_title_success() {
+        let title = build_title(NotificationStatus::Success, "npm test");
+        assert_eq!(title, "任务完成");
+    }
+
+    #[test]
+    fn test_build_title_error() {
+        let title = build_title(NotificationStatus::Error, "cargo build");
+        assert_eq!(title, "任务失败");
+    }
+
+    #[test]
+    fn test_build_title_pending() {
+        let title = build_title(NotificationStatus::Pending, "deploy");
+        assert_eq!(title, "任务进行中");
+    }
+
+    #[test]
+    fn test_build_message() {
+        let message = build_message(15, "npm test");
+        assert_eq!(message, "npm test (耗时: 15秒)");
+    }
+
+    #[test]
+    fn test_build_message_zero_duration() {
+        let message = build_message(0, "unknown cmd");
+        assert_eq!(message, "unknown cmd (耗时: 0秒)");
+    }
+
+    #[test]
+    fn test_build_message_long_duration() {
+        let message = build_message(3600, "long running task");
+        assert_eq!(message, "long running task (耗时: 3600秒)");
+    }
+}

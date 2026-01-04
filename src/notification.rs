@@ -188,12 +188,70 @@ mod platform {
 mod platform {
     use super::{NotificationManager, NotificationStatus};
     use anyhow::Result;
+    use std::process::Command;
 
     pub struct MacOSNotificationManager;
 
     impl MacOSNotificationManager {
         pub fn new() -> Self {
             Self
+        }
+
+        /// 检查是否安装了 terminal-notifier
+        fn has_terminal_notifier() -> bool {
+            Command::new("which")
+                .arg("terminal-notifier")
+                .output()
+                .map(|output| output.status.success())
+                .unwrap_or(false)
+        }
+
+        /// 使用 terminal-notifier 发送通知
+        fn send_with_terminal_notifier(
+            title: &str,
+            message: &str,
+            sound: &str,
+        ) -> Result<()> {
+            let output = Command::new("terminal-notifier")
+                .arg("-title")
+                .arg("Claude Code Notify")
+                .arg("-message")
+                .arg(message)
+                .arg("-subtitle")
+                .arg(title)
+                .arg("-sound")
+                .arg(sound)
+                .output()?;
+
+            if output.status.success() {
+                log::info!("使用 terminal-notifier 发送通知成功");
+                Ok(())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(anyhow::anyhow!("terminal-notifier 失败: {}", stderr))
+            }
+        }
+
+        /// 使用 osascript 发送通知（内置方案）
+        fn send_with_osascript(title: &str, message: &str) -> Result<()> {
+            let script = format!(
+                "display notification \"{}\" with title \"{}\" subtitle \"Claude Code Notify\"",
+                message.replace('"', "'"), // 转义引号
+                title.replace('"', "'")
+            );
+
+            let output = Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .output()?;
+
+            if output.status.success() {
+                log::info!("使用 osascript 发送通知成功");
+                Ok(())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(anyhow::anyhow!("osascript 失败: {}", stderr))
+            }
         }
     }
 
@@ -205,21 +263,47 @@ mod platform {
             message: &str,
             _duration_ms: u64,
         ) -> Result<()> {
-            // macOS 通知实现
             let icon = match status {
                 NotificationStatus::Success => "✅",
                 NotificationStatus::Error => "❌",
                 NotificationStatus::Pending => "⏳",
             };
 
-            log::info!("macOS 通知: {} {} - {}", icon, title, message);
-            println!("[macOS 通知] {} {}: {}", icon, title, message);
+            // 构建带图标的消息
+            let formatted_title = format!("{} {}", icon, title);
+            let formatted_message = message.to_string();
 
-            // TODO: 使用 cocoa 和 objc 实现真正的 macOS 通知
-            Ok(())
+            // 获取对应的声音
+            let sound = match status {
+                NotificationStatus::Success => "Glass",
+                NotificationStatus::Error => "Basso",
+                NotificationStatus::Pending => "Ping",
+            };
+
+            // 优先使用 terminal-notifier（提供更好的用户体验）
+            if Self::has_terminal_notifier() {
+                match Self::send_with_terminal_notifier(&formatted_title, &formatted_message, sound) {
+                    Ok(_) => return Ok(()),
+                    Err(e) => {
+                        log::warn!("terminal-notifier 失败，尝试 osascript: {}", e);
+                    }
+                }
+            }
+
+            // 后备方案：使用 osascript（macOS 内置）
+            match Self::send_with_osascript(&formatted_title, &formatted_message) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    // 最后的后备方案：控制台输出
+                    log::warn!("macOS 通知失败: {}, 降级到控制台输出", e);
+                    println!("[macOS 通知] {} {}: {}", icon, formatted_title, formatted_message);
+                    Ok(())
+                }
+            }
         }
 
         fn is_available(&self) -> bool {
+            // macOS 总是有某种通知方式可用（至少 osascript）
             true
         }
     }
