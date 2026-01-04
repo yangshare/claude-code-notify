@@ -95,11 +95,17 @@ impl IntegrationManager {
         hooks.remove("Stop");
 
         // 定义 Notification hook（当 Claude Code 发送权限请求通知时触发）
+        let command = if cfg!(windows) {
+            r#"ccn notify --status=pending --cmd="Claude Code 需要授权" || exit 0"#
+        } else {
+            "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
+        };
+
         let notification_hook = json!({
             "matcher": "permission_prompt",
             "hooks": [{
                 "type": "command",
-                "command": "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
+                "command": command
             }]
         });
 

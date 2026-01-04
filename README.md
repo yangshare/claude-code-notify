@@ -257,21 +257,40 @@ logging:
    - 查看 `~/.claude/settings.json`
    - 确认 `hooks` 字段存在且包含 `Notification`
    - hooks 配置示例：
-     ```json
-     {
-       "hooks": {
-         "Notification": [
-           {
-             "matcher": "permission_prompt",
-             "hooks": [{
-               "type": "command",
-               "command": "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
-             }]
-           }
-         ]
+       
+       **Linux / macOS:**
+       ```json
+       {
+         "hooks": {
+           "Notification": [
+             {
+               "matcher": "permission_prompt",
+               "hooks": [{
+                 "type": "command",
+                 "command": "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
+               }]
+             }
+           ]
+         }
        }
-     }
-     ```
+       ```
+
+       **Windows:**
+       ```json
+       {
+         "hooks": {
+           "Notification": [
+             {
+               "matcher": "permission_prompt",
+               "hooks": [{
+                 "type": "command",
+                 "command": "ccn notify --status=pending --cmd=\"Claude Code 需要授权\" || exit 0"
+               }]
+             }
+           ]
+         }
+       }
+       ```
 
 3. **手动测试通知**
    ```bash
