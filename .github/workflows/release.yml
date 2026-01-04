@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - 'main'
 
 env:
   CARGO_INCREMENTAL: 0
@@ -12,8 +12,57 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  bump-version:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+      new_version: ${{ steps.bump.outputs.new_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Bump version and create tag
+        id: bump
+        run: |
+          # 获取最新的 tag
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+
+          # 解析版本号
+          if [[ $latest_tag =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major=${BASH_REMATCH[1]}
+            minor=${BASH_REMATCH[2]}
+            patch=${BASH_REMATCH[3]}
+
+            # 递增 patch 版本
+            new_patch=$((patch + 1))
+            new_tag="v${major}.${minor}.${new_patch}"
+          else
+            new_tag="v0.0.1"
+          fi
+
+          new_version=${new_tag#v}
+
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          echo "New version: $new_tag"
+
+          # 创建并推送 tag
+          git tag -a "$new_tag" -m "Release $new_tag"
+          git push origin "$new_tag"
+
   build:
     name: Build on ${{ matrix.target }}
+    needs: bump-version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -69,7 +118,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [bump-version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -118,14 +167,11 @@ jobs:
           # 列出最终文件以供调试
           ls -la
 
-      - name: Extract version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ${{ steps.get_version.outputs.VERSION }}
+          name: ${{ needs.bump-version.outputs.new_tag }}
+          tag_name: ${{ needs.bump-version.outputs.new_tag }}
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -135,7 +181,7 @@ jobs:
 
   scoop-manifest:
     name: Update Scoop Manifest
-    needs: release
+    needs: [bump-version, release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -146,20 +192,21 @@ jobs:
 
       - name: Generate Scoop manifest
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${{ needs.bump-version.outputs.new_version }}
+          TAG=${{ needs.bump-version.outputs.new_tag }}
           cat > scoop/ccn.json << EOF
           {
             "version": "$VERSION",
             "homepage": "https://github.com/yangshare/claude-code-notify",
             "license": "MIT",
             "description": "Claude Code Notify - 优雅的任务通知工具",
-            "url": "https://github.com/yangshare/claude-code-notify/releases/download/$VERSION/ccn-windows-x86_64.exe#/ccn.exe",
-            "hash": "https://github.com/yangshare/claude-code-notify/releases/download/$VERSION/ccn-windows-x86_64.exe.sha256",
+            "url": "https://github.com/yangshare/claude-code-notify/releases/download/$TAG/ccn-windows-x86_64.exe#/ccn.exe",
+            "hash": "https://github.com/yangshare/claude-code-notify/releases/download/$TAG/ccn-windows-x86_64.exe.sha256",
             "bin": "ccn.exe",
             "checkver": "github",
             "autoupdate": {
-              "url": "https://github.com/yangshare/claude-code-notify/releases/download/$version/ccn-windows-x86_64.exe#/ccn.exe",
-              "hash": "https://github.com/yangshare/claude-code-notify/releases/download/$version/ccn-windows-x86_64.exe.sha256"
+              "url": "https://github.com/yangshare/claude-code-notify/releases/download/v\$version/ccn-windows-x86_64.exe#/ccn.exe",
+              "hash": "https://github.com/yangshare/claude-code-notify/releases/download/v\$version/ccn-windows-x86_64.exe.sha256"
             }
           }
           EOF
@@ -169,5 +216,5 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add scoop/ccn.json
-          git diff --staged --quiet || git commit -m "chore: update Scoop manifest for ${{ github.ref_name }} [skip ci]"
+          git diff --staged --quiet || git commit -m "chore: update Scoop manifest for ${{ needs.bump-version.outputs.new_tag }} [skip ci]"
           git push origin HEAD:main
