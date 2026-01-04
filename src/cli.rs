@@ -32,9 +32,9 @@ enum Commands {
         #[arg(short, long)]
         status: String,
 
-        /// 任务耗时（秒）
-        #[arg(short, long)]
-        duration: u64,
+        /// 任务耗时（秒），默认为0
+        #[arg(short, long, default_value = "0", value_name = "SECS")]
+        duration: Option<u64>,
 
         /// 执行的命令
         #[arg(short, long)]
@@ -66,7 +66,7 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         Commands::Notify { status, duration, cmd } => {
-            handle_notify(status, duration, cmd)
+            handle_notify(status, duration.unwrap_or(0), cmd)
         }
 
         Commands::Init => {
@@ -123,8 +123,12 @@ fn handle_notify(status: String, duration: u64, cmd: String) -> Result<()> {
         return Ok(());
     }
 
-    // 如果启用聚合，使用聚合器
-    if config.aggregation.enabled {
+    // duration 为 0 或 error/pending 状态时直接发送（绕过聚合）
+    let should_bypass_aggregation = duration == 0
+        || matches!(notification_status, NotificationStatus::Error | NotificationStatus::Pending);
+
+    // 如果启用聚合且不需要绕过，使用聚合器
+    if config.aggregation.enabled && !should_bypass_aggregation {
         return handle_aggregated_notification(&config, &status, duration, &cmd, notification_status);
     }
 
