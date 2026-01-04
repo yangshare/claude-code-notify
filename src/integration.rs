@@ -127,6 +127,33 @@ impl IntegrationManager {
             }
         }
 
+        // 定义 PermissionRequest hook（当 Claude Code 请求文件写/编辑权限时触发）
+        let permission_hook = json!({
+            "matcher": "Write|Edit",
+            "hooks": [{
+                "type": "command",
+                "command": command
+            }]
+        });
+
+        // 注入 PermissionRequest hook
+        let permission_request = hooks.entry("PermissionRequest").or_insert_with(|| json!([]));
+        if let Some(arr) = permission_request.as_array_mut() {
+            // 简单去重检查
+            let has_hook = arr.iter().any(|h| {
+                h["matcher"].as_str().map_or(false, |m| m == "Write|Edit")
+                    && h["hooks"].as_array().map_or(false, |cmds| {
+                        cmds.iter().any(|cmd| {
+                            cmd["command"].as_str().map_or(false, |c| c.contains("ccn notify"))
+                        })
+                    })
+            });
+
+            if !has_hook {
+                arr.push(permission_hook);
+            }
+        }
+
         // 写回配置文件
         let updated_content = serde_json::to_string_pretty(&config)
             .context("序列化配置失败")?;
@@ -213,6 +240,21 @@ impl IntegrationManager {
                         hooks.remove("Notification");
                     }
                 }
+
+                // 移除 PermissionRequest 中的 ccn hooks
+                if let Some(arr) = hooks.get_mut("PermissionRequest").and_then(|v| v.as_array_mut()) {
+                    arr.retain(|h| {
+                        !h["matcher"].as_str().map_or(false, |m| m == "Write|Edit")
+                            || !h["hooks"].as_array().map_or(false, |cmds| {
+                                cmds.iter().any(|cmd| {
+                                    cmd["command"].as_str().map_or(false, |c| c.contains("ccn notify"))
+                                })
+                            })
+                    });
+                    if arr.is_empty() {
+                        hooks.remove("PermissionRequest");
+                    }
+                }
             }
         }
 
@@ -252,6 +294,20 @@ impl IntegrationManager {
                             })
                         });
 
+                    // 检查 PermissionRequest hook
+                    let has_permission_request = hooks_obj.get("PermissionRequest")
+                        .and_then(|v| v.as_array())
+                        .map_or(false, |arr| {
+                            arr.iter().any(|h| {
+                                h["matcher"].as_str().map_or(false, |m| m == "Write|Edit")
+                                    && h["hooks"].as_array().map_or(false, |cmds| {
+                                        cmds.iter().any(|cmd| {
+                                            cmd["command"].as_str().map_or(false, |c| c.contains("ccn notify"))
+                                        })
+                                    })
+                            })
+                        });
+
                     // 检查旧的 Stop hook
                     let has_stop = hooks_obj.get("Stop")
                         .and_then(|v| v.as_array())
@@ -279,7 +335,7 @@ impl IntegrationManager {
                     let has_legacy = hooks_obj.contains_key("PostCommand") ||
                                    hooks_obj.contains_key("CommandError");
 
-                    return Ok(has_notification || has_stop || has_post_tool || has_legacy);
+                    return Ok(has_notification || has_permission_request || has_stop || has_post_tool || has_legacy);
                 }
             }
         }
