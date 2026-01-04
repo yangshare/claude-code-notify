@@ -18,7 +18,7 @@ use crate::path_manager::PathManager;
 #[derive(Parser, Debug)]
 #[command(name = "ccn")]
 #[command(about = "Claude Code Notify - 优雅的任务通知工具", long_about = None)]
-#[command(version = "0.1.0")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
     #[command(subcommand)]
     command: Commands,

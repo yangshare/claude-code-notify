@@ -86,37 +86,38 @@ impl IntegrationManager {
             .as_object_mut()
             .unwrap();
 
-        // 清理旧的 hooks
+        // 清理旧的 hooks（包括不存在的 PermissionRequest 和 Stop）
         hooks.remove("PostCommand");
         hooks.remove("CommandError");
         hooks.remove("PostToolUse");
         hooks.remove("PostToolUseFailure");
+        hooks.remove("PermissionRequest");
+        hooks.remove("Stop");
 
-        // 定义 PermissionRequest hook（在需要权限时通知）
-        let permission_hook = json!({
-            "matcher": "Bash|Read|Write|Edit",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
-                }
-            ]
+        // 定义 Notification hook（当 Claude Code 发送权限请求通知时触发）
+        let notification_hook = json!({
+            "matcher": "permission_prompt",
+            "hooks": [{
+                "type": "command",
+                "command": "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
+            }]
         });
 
-        // 注入 PermissionRequest hook
-        let permission_request = hooks.entry("PermissionRequest").or_insert_with(|| json!([]));
-        if let Some(arr) = permission_request.as_array_mut() {
+        // 注入 Notification hook
+        let notification = hooks.entry("Notification").or_insert_with(|| json!([]));
+        if let Some(arr) = notification.as_array_mut() {
             // 简单去重检查
             let has_hook = arr.iter().any(|h| {
-                h["hooks"].as_array().map_or(false, |cmds| {
-                    cmds.iter().any(|cmd| {
-                        cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify --status=pending"))
+                h["matcher"].as_str().map_or(false, |m| m == "permission_prompt")
+                    && h["hooks"].as_array().map_or(false, |cmds| {
+                        cmds.iter().any(|cmd| {
+                            cmd["command"].as_str().map_or(false, |c| c.contains("ccn notify"))
+                        })
                     })
-                })
             });
 
             if !has_hook {
-                arr.push(permission_hook);
+                arr.push(notification_hook);
             }
         }
 
@@ -161,6 +162,8 @@ impl IntegrationManager {
                 // 移除旧的 legacy hooks
                 hooks.remove("PostCommand");
                 hooks.remove("CommandError");
+                hooks.remove("PermissionRequest");
+                hooks.remove("Stop");
 
                 // 移除 PostToolUse 中的 ccn hooks
                 if let Some(arr) = hooks.get_mut("PostToolUse").and_then(|v| v.as_array_mut()) {
@@ -189,6 +192,21 @@ impl IntegrationManager {
                         hooks.remove("PostToolUseFailure");
                     }
                 }
+
+                // 移除 Notification 中的 ccn hooks
+                if let Some(arr) = hooks.get_mut("Notification").and_then(|v| v.as_array_mut()) {
+                    arr.retain(|h| {
+                        !h["matcher"].as_str().map_or(false, |m| m == "permission_prompt")
+                            || !h["hooks"].as_array().map_or(false, |cmds| {
+                                cmds.iter().any(|cmd| {
+                                    cmd["command"].as_str().map_or(false, |c| c.contains("ccn notify"))
+                                })
+                            })
+                    });
+                    if arr.is_empty() {
+                        hooks.remove("Notification");
+                    }
+                }
             }
         }
 
@@ -214,7 +232,32 @@ impl IntegrationManager {
         if let Some(obj) = config.as_object() {
             if let Some(hooks) = obj.get("hooks") {
                 if let Some(hooks_obj) = hooks.as_object() {
-                    let has_success = hooks_obj.get("PostToolUse")
+                    // 检查 Notification hook
+                    let has_notification = hooks_obj.get("Notification")
+                        .and_then(|v| v.as_array())
+                        .map_or(false, |arr| {
+                            arr.iter().any(|h| {
+                                h["matcher"].as_str().map_or(false, |m| m == "permission_prompt")
+                                    && h["hooks"].as_array().map_or(false, |cmds| {
+                                        cmds.iter().any(|cmd| {
+                                            cmd["command"].as_str().map_or(false, |c| c.contains("ccn notify"))
+                                        })
+                                    })
+                            })
+                        });
+
+                    // 检查旧的 Stop hook
+                    let has_stop = hooks_obj.get("Stop")
+                        .and_then(|v| v.as_array())
+                        .map_or(false, |arr| {
+                            arr.iter().any(|h| {
+                                h["type"].as_str().map_or(false, |t| t == "command")
+                                    && h["command"].as_str().map_or(false, |c| c.contains("ccn notify"))
+                            })
+                        });
+
+                    // 检查旧的 PostToolUse hook
+                    let has_post_tool = hooks_obj.get("PostToolUse")
                         .and_then(|v| v.as_array())
                         .map_or(false, |arr| {
                             arr.iter().any(|h| {
@@ -225,12 +268,12 @@ impl IntegrationManager {
                                 })
                             })
                         });
-                    
+
                     // 同时也检查旧的配置，以便向后兼容检测
                     let has_legacy = hooks_obj.contains_key("PostCommand") ||
                                    hooks_obj.contains_key("CommandError");
 
-                    return Ok(has_success || has_legacy);
+                    return Ok(has_notification || has_stop || has_post_tool || has_legacy);
                 }
             }
         }
@@ -391,28 +434,31 @@ mod tests {
 
     #[test]
     fn test_hooks_json_structure() {
-        // 测试 hooks JSON 结构
+        // 测试 hooks JSON 结构（Notification 事件）
         let hooks_json = json!({
-            "PostToolUse": [
+            "Notification": [
                 {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": "ccn notify --status=success --duration=$DURATION --cmd='$COMMAND'"
-                        }
-                    ]
+                    "matcher": "permission_prompt",
+                    "hooks": [{
+                        "type": "command",
+                        "command": "ccn notify --status=pending --cmd='Claude Code 需要授权'"
+                    }]
                 }
             ]
         });
 
         assert!(hooks_json.is_object());
-        assert!(hooks_json.get("PostToolUse").is_some());
+        assert!(hooks_json.get("Notification").is_some());
 
-        if let Some(arr) = hooks_json["PostToolUse"].as_array() {
+        if let Some(arr) = hooks_json["Notification"].as_array() {
             assert!(!arr.is_empty());
             assert!(arr[0]["matcher"].is_string());
             assert!(arr[0]["hooks"].is_array());
+            if let Some(hooks) = arr[0]["hooks"].as_array() {
+                assert!(!hooks.is_empty());
+                assert!(hooks[0]["type"].is_string());
+                assert!(hooks[0]["command"].is_string());
+            }
         }
     }
 }

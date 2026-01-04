@@ -255,15 +255,16 @@ logging:
 
 2. **检查 hooks 是否正确注入**
    - 查看 `~/.claude/settings.json`
-   - 确认 `hooks` 字段存在且包含 `PermissionRequest`
+   - 确认 `hooks` 字段存在且包含 `Notification`
    - hooks 配置示例：
      ```json
      {
        "hooks": {
-         "PermissionRequest": [
+         "Notification": [
            {
-             "matcher": "Bash|Read|Write|Edit",
+             "matcher": "permission_prompt",
              "hooks": [{
+               "type": "command",
                "command": "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
              }]
            }

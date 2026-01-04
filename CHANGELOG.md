@@ -8,9 +8,9 @@
 ## [未发布]
 
 ### 新增
-- **权限请求通知**：使用 `PermissionRequest` 事件在需要授权时通知用户
-  - 监听 `Bash|Read|Write|Edit` 操作
-  - 在权限对话框显示前发送通知
+- **权限请求通知**：使用 `Notification` 事件配合 `permission_prompt` matcher 在需要授权时通知用户
+  - 当 Claude Code 需要用户授权（如运行 Bash 命令）时自动发送通知
+  - 使用官方 `Notification` hook 事件，配合 `matcher: "permission_prompt"` 过滤权限请求
   - 帮助用户及时响应 Claude Code 的授权请求
 - **紧急通知立即发送**：duration=0 或 error/pending 状态的通知立即显示，绕过聚合
 - **duration 参数可选**：`ccn notify` 命令的 `--duration` 参数现为可选，默认值为 0
@@ -27,7 +27,9 @@
 - README 新增故障排查章节，提供常见问题的解决方案
 
 ### 变更
-- **hooks 事件类型**：从不存在的 `PostToolUseFailure` 改为官方支持的 `PermissionRequest`
+- **hooks 事件类型**：从 `Stop` 改为更贴合需求的 `Notification` 事件
+  - 使用 `matcher: "permission_prompt"` 专门监听权限请求通知
+  - 这比 `Stop` 事件更精确，只在真正需要授权时才触发
 - **hooks 命令简化**：移除环境变量依赖（`$DURATION`、`$COMMAND`），使用固定文本
 - **系统要求更新**：最低系统要求从 Windows 10 更新为 Windows 11
 - **依赖更新**：
@@ -36,11 +38,15 @@
   - 保留 `winreg = "0.52"` 用于 PATH 管理
 
 ### 修复
-- **修复 hooks 配置错误**：
+- **修复 hooks 事件选择错误**：
+  - 最初使用了不存在的 `PermissionRequest` 事件（虽然该事件存在于官方文档，但其用途是权限决策控制而非通知）
+  - 后来改用 `Stop` 事件（当 Claude Code 完成响应时触发），但不够精确
+  - 最终使用正确的 `Notification` 事件配合 `matcher: "permission_prompt"`（专门监听权限请求通知）
+  - 修正 hooks 配置结构以匹配 `Notification` 事件的要求
+- **之前的 hooks 配置错误**：
   - 移除不存在的 `PostToolUseFailure` 事件
   - 修正环境变量错误（hooks 通过 stdin 传递 JSON，非环境变量）
   - 简化 hooks 命令，无需额外的 Python/PowerShell 脚本
-  - 扩大 matcher 范围：`Bash` → `Bash|Read|Write|Edit`
 - 修正配置文件路径检测逻辑
   - 统一使用 `~/.claude/settings.json`（官方规范路径）
   - 移除错误的 `config.json` 文件名检测
