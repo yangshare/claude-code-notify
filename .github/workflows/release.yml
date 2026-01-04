@@ -61,7 +61,11 @@ jobs:
 
           # 提交 Cargo.toml 修改
           git add Cargo.toml
-          git commit -m "chore: bump version to $new_version [skip ci]"
+          if git diff --staged --quiet; then
+            echo "No changes to commit, version might be already updated."
+          else
+            git commit -m "chore: bump version to $new_version [skip ci]"
+          fi
 
           # 创建 tag
           git tag "$new_tag"
@@ -100,6 +104,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-version.outputs.new_tag }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
