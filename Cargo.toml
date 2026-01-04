@@ -1,7 +1,7 @@
 [package]
 name = "ccn"
-version = "0.1.0"
-edition = "2021"
+version = "1.0.8"
+edition = "2024"
 description = "Claude Code Notify - 优雅的任务通知工具"
 authors = ["CCN Team"]
 license = "MIT"
@@ -55,6 +55,10 @@ crossterm = { version = "0.28", optional = true }
 default = []
 tui = ["ratatui", "crossterm"]
 sound = ["rodio"]
+
+[lib]
+name = "ccn"
+path = "src/lib.rs"
 
 [[bin]]
 name = "ccn"

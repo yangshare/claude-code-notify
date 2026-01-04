@@ -293,3 +293,126 @@ pub struct VerificationResult {
     /// 错误信息（如果有）
     pub error: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_integration_manager_new() {
+        let manager = IntegrationManager::new();
+        // 测试创建成功（无 panic）
+        let _ = &manager;
+    }
+
+    #[test]
+    fn test_backup_config_filename_format() {
+        let manager = IntegrationManager::new();
+
+        // 这个测试需要实际文件存在，所以我们在临时目录中测试
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_settings.json");
+
+        // 创建测试文件
+        if let Ok(_) = fs::write(&test_file, "{}") {
+            let backup_result = manager.backup_config(&test_file);
+
+            // 验证备份文件名格式
+            assert!(backup_result.is_ok());
+            let backup_path = backup_result.unwrap();
+            let backup_filename = backup_path.file_name().unwrap().to_string_lossy();
+
+            // 备份文件应该包含 .bak. 前缀和时间戳
+            assert!(backup_filename.contains(".bak."));
+
+            // 清理
+            let _ = fs::remove_file(&test_file);
+            let _ = fs::remove_file(&backup_path);
+        }
+    }
+
+    #[test]
+    fn test_home_dir_detection() {
+        // 测试主目录检测逻辑
+        let home = IntegrationManager::home_dir();
+
+        // 在大多数环境中应该能找到主目录
+        if cfg!(windows) {
+            assert!(home.is_some());
+            let path = home.unwrap();
+            // Windows 上通常是 USERPROFILE
+            assert!(path.to_string_lossy().contains(":\\") || path.starts_with("\\\\"));
+        } else {
+            assert!(home.is_some());
+            let path = home.unwrap();
+            // Unix 上通常是 /home 或 /Users
+            assert!(path.starts_with("/"));
+        }
+    }
+
+    #[test]
+    fn test_verification_result_structure() {
+        let result = VerificationResult {
+            ccn_in_path: true,
+            test_notification_sent: false,
+            error: Some("测试错误".to_string()),
+        };
+
+        assert_eq!(result.ccn_in_path, true);
+        assert_eq!(result.test_notification_sent, false);
+        assert!(result.error.is_some());
+        assert_eq!(result.error.unwrap(), "测试错误");
+    }
+
+    #[test]
+    fn test_verification_result_no_error() {
+        let result = VerificationResult {
+            ccn_in_path: true,
+            test_notification_sent: true,
+            error: None,
+        };
+
+        assert!(result.ccn_in_path);
+        assert!(result.test_notification_sent);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_get_config_dir_default() {
+        // 测试默认配置目录检测
+        let config_dir = IntegrationManager::get_config_dir();
+
+        assert!(config_dir.is_some());
+        let path = config_dir.unwrap();
+
+        // 应该包含 .claude
+        assert!(path.to_string_lossy().contains(".claude"));
+    }
+
+    #[test]
+    fn test_hooks_json_structure() {
+        // 测试 hooks JSON 结构
+        let hooks_json = json!({
+            "PostToolUse": [
+                {
+                    "matcher": "Bash",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "ccn notify --status=success --duration=$DURATION --cmd='$COMMAND'"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        assert!(hooks_json.is_object());
+        assert!(hooks_json.get("PostToolUse").is_some());
+
+        if let Some(arr) = hooks_json["PostToolUse"].as_array() {
+            assert!(!arr.is_empty());
+            assert!(arr[0]["matcher"].is_string());
+            assert!(arr[0]["hooks"].is_array());
+        }
+    }
+}

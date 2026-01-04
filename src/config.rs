@@ -19,7 +19,7 @@ pub struct Config {
     pub logging: LoggingConfig,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum FocusAssistantMode {
     Respect,
@@ -153,4 +153,123 @@ pub fn save_config(config: &Config) -> Result<()> {
         .with_context(|| format!("无法写入配置文件: {:?}", config_path))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert_eq!(config.version, "1.0");
+        assert_eq!(config.sound_enabled, true);
+        assert_eq!(config.threshold.min_duration, 10);
+        assert!(config.threshold.whitelist.is_empty());
+        assert_eq!(config.aggregation.enabled, true);
+        assert_eq!(config.aggregation.window, 5000);
+        assert_eq!(config.aggregation.max_toasts, 3);
+        assert_eq!(config.logging.level, "info");
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let config = Config::default();
+        let yaml = serde_yaml::to_string(&config).unwrap();
+
+        // 检查关键字段存在
+        assert!(yaml.contains("version"));
+        assert!(yaml.contains("sound_enabled"));
+        assert!(yaml.contains("threshold"));
+        assert!(yaml.contains("min_duration"));
+        assert!(yaml.contains("aggregation"));
+    }
+
+    #[test]
+    fn test_config_deserialization() {
+        let yaml = r#"
+version: "1.0"
+sound_enabled: false
+focus_assistant_mode: always
+threshold:
+  min_duration: 15
+  whitelist:
+    - deploy
+    - release
+templates:
+  default:
+    icon: "default.png"
+    sound: "default.wav"
+    duration: 5000
+aggregation:
+  enabled: false
+  window: 3000
+  max_toasts: 5
+logging:
+  level: "debug"
+  file: "ccn.log"
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.sound_enabled, false);
+        assert_eq!(config.threshold.min_duration, 15);
+        assert_eq!(config.threshold.whitelist.len(), 2);
+        assert_eq!(config.threshold.whitelist[0], "deploy");
+        assert_eq!(config.aggregation.enabled, false);
+        assert_eq!(config.aggregation.window, 3000);
+        assert_eq!(config.aggregation.max_toasts, 5);
+        assert_eq!(config.logging.level, "debug");
+        assert!(config.logging.file.is_some());
+    }
+
+    #[test]
+    fn test_template_config() {
+        let template = TemplateConfig {
+            icon: "test.png".to_string(),
+            sound: "test.wav".to_string(),
+            duration: 8000,
+        };
+
+        assert_eq!(template.icon, "test.png");
+        assert_eq!(template.sound, "test.wav");
+        assert_eq!(template.duration, 8000);
+    }
+
+    #[test]
+    fn test_templates_config_custom() {
+        let mut custom = std::collections::HashMap::new();
+        custom.insert("build".to_string(), TemplateConfig {
+            icon: "build.png".to_string(),
+            sound: "build.wav".to_string(),
+            duration: 6000,
+        });
+
+        let templates = TemplatesConfig {
+            default: TemplateConfig {
+                icon: "default.png".to_string(),
+                sound: "default.wav".to_string(),
+                duration: 5000,
+            },
+            custom,
+        };
+
+        assert_eq!(templates.custom.len(), 1);
+        assert!(templates.custom.contains_key("build"));
+        assert_eq!(templates.custom["build"].duration, 6000);
+    }
+
+    #[test]
+    fn test_focus_assistant_mode() {
+        let modes = vec![
+            FocusAssistantMode::Respect,
+            FocusAssistantMode::Always,
+            FocusAssistantMode::Never,
+        ];
+
+        for mode in modes {
+            let yaml = serde_yaml::to_string(&mode).unwrap();
+            let deserialized: FocusAssistantMode = serde_yaml::from_str(&yaml).unwrap();
+            assert_eq!(mode, deserialized);
+        }
+    }
 }
