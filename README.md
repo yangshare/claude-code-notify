@@ -123,15 +123,23 @@ ccn config
 ### 手动发送通知
 
 ```bash
-# 成功通知
+# 成功通知（--duration 参数可选，默认为 0）
 ccn notify --status success --duration 15 --cmd "npm run build"
 
 # 失败通知
 ccn notify --status error --duration 5 --cmd "npm test"
 
-# 等待状态
-ccn notify --status pending --duration 0 --cmd "deploying..."
+# 等待状态（duration=0 表示未知/不适用）
+ccn notify --status pending --cmd "需要授权的操作"
+
+# 不带 duration 参数（适用于 hooks 场景）
+ccn notify --status success --cmd "任务完成"
 ```
+
+**注意**：
+- `--duration` 参数现在为**可选**，默认值为 0
+- 当 `duration=0` 时，通知会**跳过阈值检查**（不受 min_duration 限制）
+- 紧急通知（error、pending 状态或 duration=0）会**立即显示**，绕过聚合
 
 ### 卸载集成
 
@@ -247,7 +255,22 @@ logging:
 
 2. **检查 hooks 是否正确注入**
    - 查看 `~/.claude/settings.json`
-   - 确认 `hooks` 字段存在且包含 `PostCommand` 和 `CommandError`
+   - 确认 `hooks` 字段存在且包含 `PermissionRequest`
+   - hooks 配置示例：
+     ```json
+     {
+       "hooks": {
+         "PermissionRequest": [
+           {
+             "matcher": "Bash|Read|Write|Edit",
+             "hooks": [{
+               "command": "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
+             }]
+           }
+         ]
+       }
+     }
+     ```
 
 3. **手动测试通知**
    ```bash

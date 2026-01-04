@@ -89,60 +89,34 @@ impl IntegrationManager {
         // 清理旧的 hooks
         hooks.remove("PostCommand");
         hooks.remove("CommandError");
+        hooks.remove("PostToolUse");
+        hooks.remove("PostToolUseFailure");
 
-        // 定义新的 hooks
-        let success_hook = json!({
-            "matcher": "Bash",
+        // 定义 PermissionRequest hook（在需要权限时通知）
+        let permission_hook = json!({
+            "matcher": "Bash|Read|Write|Edit",
             "hooks": [
                 {
                     "type": "command",
-                    "command": "ccn notify --status=success --duration=$DURATION --cmd='$COMMAND' || true"
+                    "command": "ccn notify --status=pending --cmd='Claude Code 需要授权' || true"
                 }
             ]
         });
 
-        let failure_hook = json!({
-            "matcher": "Bash",
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": "ccn notify --status=error --duration=$DURATION --cmd='$COMMAND' || true"
-                }
-            ]
-        });
-
-        // 注入 PostToolUse hook
-        // 如果不存在则创建数组，如果存在且是数组则追加（避免重复）
-        let post_tool_use = hooks.entry("PostToolUse").or_insert_with(|| json!([]));
-        if let Some(arr) = post_tool_use.as_array_mut() {
-            // 简单去重检查：检查是否已经包含相同的 command
+        // 注入 PermissionRequest hook
+        let permission_request = hooks.entry("PermissionRequest").or_insert_with(|| json!([]));
+        if let Some(arr) = permission_request.as_array_mut() {
+            // 简单去重检查
             let has_hook = arr.iter().any(|h| {
                 h["hooks"].as_array().map_or(false, |cmds| {
                     cmds.iter().any(|cmd| {
-                        cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify --status=success"))
-                    })
-                })
-            });
-            
-            if !has_hook {
-                arr.push(success_hook);
-            }
-        }
-
-        // 注入 PostToolUseFailure hook
-        let post_tool_use_failure = hooks.entry("PostToolUseFailure").or_insert_with(|| json!([]));
-        if let Some(arr) = post_tool_use_failure.as_array_mut() {
-             // 简单去重检查
-             let has_hook = arr.iter().any(|h| {
-                h["hooks"].as_array().map_or(false, |cmds| {
-                    cmds.iter().any(|cmd| {
-                        cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify --status=error"))
+                        cmd["command"].as_str().map_or(false, |s| s.contains("ccn notify --status=pending"))
                     })
                 })
             });
 
             if !has_hook {
-                arr.push(failure_hook);
+                arr.push(permission_hook);
             }
         }
 

@@ -22,6 +22,11 @@ impl PolicyEngine {
             return true;
         }
 
+        // duration 为 0 表示未知/不可用（如 hooks 场景），跳过阈值检查
+        if duration_sec == 0 {
+            return true;
+        }
+
         // 检查白名单
         for whitelist_cmd in &self.config.threshold.whitelist {
             if cmd.contains(whitelist_cmd) {
