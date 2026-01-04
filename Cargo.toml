@@ -1,6 +1,6 @@
 [package]
 name = "ccn"
-version = "1.0.11"
+version = "1.0.12"
 edition = "2024"
 description = "Claude Code Notify - 优雅的任务通知工具"
 authors = ["CCN Team"]
